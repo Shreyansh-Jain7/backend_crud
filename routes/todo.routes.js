@@ -2,6 +2,7 @@ const express=require("express")
 const {TodoModel}=require("../model/todo.model")
 const todoRouter=express.Router();
 const jwt=require("jsonwebtoken");
+const bcrypt=require("bcrypt");
 
 todoRouter.get("/",async (req,res)=>{
     const query=req.query;
@@ -23,11 +24,13 @@ todoRouter.get("/",async (req,res)=>{
 })
 
 todoRouter.post("/register",async (req,res)=>{
-    const data=req.body
+    const {name,age,password}=req.body
     try{
-        const user=new TodoModel(data)
-        await user.save()
-        res.status(200).send({"msg":"user has been created"})
+        bcrypt.hash(password,5,async (err,hash)=>{
+            const user=new TodoModel({name,age,password:hash})
+            await user.save()
+            res.status(200).send({"msg":"user has been created"})
+        })    
     }catch(err){
         res.status(400).send({"err":err.message})
     }
@@ -36,9 +39,13 @@ todoRouter.post("/register",async (req,res)=>{
 todoRouter.post("/login",async (req,res)=>{
     const {name,password}=req.body;
     try{
-        const user=await TodoModel.find({name,password});
-        user.length>0? res.status(200).send({"msg":"login succesful","token":jwt.sign({names:"Shreyansh"},"jain",{expiresIn: '1h'})}):
-            res.status(400).send({"err":"login failed"});
+        const user=await TodoModel.find({name});
+        if(user.length>0){
+            bcrypt.compare(password,user[0].password,(err,result)=>{
+                result? res.status(200).send({"msg":"login succesful","token":jwt.sign({"userId":user[0]._id},"jain",{expiresIn: '1h'})}):
+                    res.status(400).send({"err":"login failed, wrong credentials"});
+            })
+        }
     }catch(err){
         res.status(400).send({"err":err.message})
     }
@@ -63,7 +70,7 @@ todoRouter.patch("/:todoId",async (req,res)=>{
             res.status(400).send({"err":"something went wrong"})
         }
     }else{
-        res.status(400).send({"err":error});
+        res.status(400).send({"err":"please login"});
     }
 })
 todoRouter.delete("/:todoId",async (req,res)=>{
